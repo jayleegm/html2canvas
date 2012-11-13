@@ -40,6 +40,7 @@
             <file name="Util.js"/>
 			<file name="renderers/Canvas.js"/>
 			<file name="renderers/SVG.js"/>
+            <file name="renderers/PDF.js"/>
             <file name="html2canvas-post.txt"/>
 		</filelist>
 	</path>

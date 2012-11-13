@@ -1,12 +1,16 @@
 <html> 
 <head>
 <script type="text/javascript" src="external/jquery-1.6.2.min.js"></script>
+<script type="text/javascript" src="src/lib/jspdf.js"></script>
 <script type="text/javascript" src="build/html2canvas.js"></script>
 <script type="text/javascript" src="build/jquery.plugin.html2canvas.js"></script>
 <script type="text/javascript">
 $(window).ready(function() {
-  $('body').html2canvas();
-  
+
+html2canvas([document.body], { renderer: "PDF"});  
+
+$('body').html2canvas();
+
 /*
   var queue = html2canvas.Parse();
   
