@@ -6,26 +6,28 @@
   Released under MIT License
 */
 
-function hexToRGB(hex) {
+function hexToRGBA(hex) {
     var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     return result ? {
         r: parseInt(result[1], 16),
         g: parseInt(result[2], 16),
-        b: parseInt(result[3], 16)
+        b: parseInt(result[3], 16),
+        a: parseInt(result[4] || "aa", 16) / 255
     } : null;
 }
 
-function rgbToRGBObject (rgba) {
-    var result = /^\s*(?:rgb|rgba)\(\s*([0-9]+),\s*([0-9]+),\s*([0-9]+)/i.exec(rgba);
+function rgbaToRGBAObject (rgba) {
+    var result = /^\s*(?:rgb|rgba)\(\s*([0-9]+),\s*([0-9]+),\s*([0-9]+)(?:\)|,\s*([0-9\.]+)\))/i.exec(rgba);
     return result ? {
         r: parseInt(result[1], 10),
         g: parseInt(result[2], 10),
-        b: parseInt(result[3], 10)
+        b: parseInt(result[3], 10),
+        a: parseInt(result[4] || 1, 10)
     } : null;
 }
 
-function colorToRGB (color) {
-    return color.indexOf("rgb") == -1 ? hexToRGB(color) : rgbToRGBObject(color);
+function colorToRGBA (color) {
+    return color.indexOf("rgb") == -1 ? hexToRGBA(color) : rgbaToRGBAObject(color);
 }  
 
 // size in points: 'a3': [841.89, 1190.55]
@@ -37,13 +39,39 @@ _html2canvas.Renderer.PDF = function( options ) {
 
     methods,
 
-    pageWidth = 1190,
-    pageHeight = 841;
+    //pageWidth = 1190,
+    // pageHeight = 841;
 
     methods = {
         _create: function( zStack, options, doc, queue, _html2canvas ) {
 
-            var pdf = new jsPDF('landscape','pt','a3'),
+            function drawShape ( pdf, originPoint, args ) {                                    
+                var i, len = args.length;
+                
+                var endPoint = originPoint, vectorShifts = [];
+
+                for ( i = 0; i < len; i++ ) {
+                    var argsArgs = args[i]["arguments"];
+                    switch(args[i].name) {
+                        case "moveTo":
+                            originPoint = [argsArgs[0], argsArgs[1]];
+                            endPoint = originPoint;
+                            break;
+                        case "lineTo":
+                            vectorShifts.push([argsArgs[0] - endPoint[0], argsArgs[1] - endPoint[1]]);
+                            endPoint = [argsArgs[0],argsArgs[1]];
+                            break;
+                    }
+
+                }
+                vectorShifts.push([originPoint[0] - endPoint[0], originPoint[1] - endPoint[1]]);
+
+                pdf.lines(vectorShifts, originPoint[0], originPoint[1], [1,1], "F");
+            }
+
+            var renderElement = $(options.elements[0]);
+
+            var pdf = new jsPDF('landscape','pt', [renderElement.outerWidth(true), renderElement.outerHeight(true)]),
                 storageContext,
                 i,
                 queueLen,
@@ -60,11 +88,10 @@ _html2canvas.Renderer.PDF = function( options ) {
                 fontProperties,
                 property;
 
-            fstyle = tmp.fillColor || {r: 255, g: 255, b: 255};
-            tmp.fillColor = fstyle; // tmp.fillColor = colorToRGB(zStack.backgroundColor);
+            tmp.fillColor = colorToRGBA(zStack.backgroundColor);
+            tmp.globalAlpha = tmp.fillColor.a;
+            // pdf.setDrawColor(0);
             pdf.setFillColor(tmp.fillColor.r,tmp.fillColor.b,tmp.fillColor.g);
-            pdf.rect(0,0,pageWidth,pageHeight,"F");
-            tmp.fillColor = fstyle;
 
             for ( i = 0, queueLen = queue.length; i < queueLen; i+=1 ) {
 
@@ -82,10 +109,13 @@ _html2canvas.Renderer.PDF = function( options ) {
                             case "variable":
                                 // ctx[renderItem.name] = renderItem['arguments'];
                                 switch(renderItem.name) {
+                                    case "globalAlpha":
+                                        tmp.globalAlpha = renderItem["arguments"];
+                                        break;
                                     case "fillStyle":
                                         // fstyle = tmp.fillColor;
                                         value = renderItem["arguments"];
-                                        tmp.fillColor = colorToRGB(value);
+                                        tmp.fillColor = colorToRGBA(value);
                                         pdf.setFillColor(tmp.fillColor.r, tmp.fillColor.g, tmp.fillColor.b);
                                         break;
                                     case "font":
@@ -114,7 +144,43 @@ _html2canvas.Renderer.PDF = function( options ) {
                                         pdf.setFontSize(tmp.fontSize);
                                         
                                         fonts:
-                                        while ( tmp.fontName = tmp.fontNames.shift() )
+                                        while ( tmp.fontName = tmp.fontNames.shift() ) {
+                                            switch (tmp.fontName.toLowerCase()) {
+                                                case "arial":
+                                                case "verdana":
+                                                case "tahoma":
+                                                case "geneva":
+                                                case "trebuchet ms":
+                                                case "MS Sans Serif":
+                                                case "sans-serif":
+                                                    tmp.fontName = "helvetica";
+                                                    break;
+                                                case "arial black":
+                                                case "impact":
+                                                case "charcoal":
+                                                case "gadget":
+                                                    tmp.fontName = "helvetica";
+                                                    pdf.setFontType("bold");
+                                                    break;
+                                                case "times new roman":
+                                                case "georgia":
+                                                case "comic sans ms":
+                                                case "palatino linotype":
+                                                case "book antiqua":
+                                                case "palatino":
+                                                case "MS Serif":
+                                                case "New York":
+                                                case "serif":
+                                                    tmp.fontName = "times";
+                                                    break;
+                                                case "lucida console":
+                                                case "lucida sans unicode":
+                                                case "monaco":
+                                                case "lucida grande":
+                                                case "monospace":
+                                                    tmp.fontName = "courier";
+                                                    break;
+                                            }
                                             switch (tmp.fontName.toLowerCase()) {
                                                 case "helvetica":
                                                 case "helvetica-bold":
@@ -124,57 +190,54 @@ _html2canvas.Renderer.PDF = function( options ) {
                                                 case "courier-bold":
                                                 case "courier-oblique":
                                                 case "courier-boldoblique":
+                                                case "times":
                                                 case "times-roman":
                                                 case "times-bold":
                                                 case "times-italic":
                                                 case "times-bolditalic":
-                                                    pdf.setFont(fontProperties[2]); // only knows some fonts, so fix this
+                                                    pdf.setFont(tmp.fontName); // only knows some fonts, so fix this
                                                     break fonts;
-                                                    break;
                                                 default:
                                                     try {
-                                                        pdf.setFont("helvetica");
+                                                        pdf.setFont("times");
                                                     } catch (e) {
-                                                        pdf.setStyle("normal");
-                                                        pdf.setFont("helvetica");
+                                                        pdf.setFontType("normal");
+                                                        pdf.setFont("times");
+                                                        console.log(JSON.stringify(pdf.getFontList()));
                                                     }
                                                     break;
                                             }
+                                        }
                                         break;
                                     default:
-                                        name = renderItem["name"];
+                                        name = renderItem.name;
                                         value = renderItem["arguments"];
                                         break;
                                 }
                                 break;
                             case "function":
                                 if (renderItem.name === "fillRect") {
+                                    // globally non-transparent and fill color non-transparent
+                                    if (tmp.globalAlpha && tmp.fillColor.a) {
+                                        pdf.rect.apply(pdf, Array.prototype.slice.call(renderItem["arguments"]).concat("F"));
+                                    }
 
-                                    pdf.rect.apply(pdf, Array.prototype.concat.call(renderItem["arguments"], "F"));
-
-                                /*
                                 } else if (renderItem.name === "drawShape") {
-                                    
-                                    ( function( args ) {
-                                      
-                                        var i, len = args.length;
-                                        ctx.beginPath();
-                                        for ( i = 0; i < len; i++ ) {   
-                                            ctx[ args[ i ].name ].apply( ctx, args[ i ]['arguments'] );
-                                        }
-                                        ctx.closePath();
-                                        ctx.fill();
-                                    })( renderItem['arguments'] );
-                                */
-                                    
+                                    if (tmp.globalAlpha && tmp.fillColor.a) {
+                                        var originPoint = [0,0];
+                                        
+                                        drawShape(pdf, originPoint, renderItem["arguments"]);
+                                    }
                                 } else if (renderItem.name === "fillText") {
-
-                                    value = renderItem["arguments"];
-                                    pdf.text.call(pdf, value[1], value[2], value[0]);
+                                    if (tmp.globalAlpha) {
+                                        value = renderItem["arguments"];
+                                        pdf.setTextColor(tmp.fillColor.r, tmp.fillColor.g, tmp.fillColor.b);
+                                        pdf.text.call(pdf, value[1], value[2], value[0]);
+                                    }
 
                                 } else if (renderItem.name === "drawImage") {
 
-                                    if (renderItem['arguments'][8] > 0 && renderItem['arguments'][7]){
+                                    if (tmp.globalAlpha && renderItem['arguments'][8] > 0 && renderItem['arguments'][7]) {
 
                                         value = renderItem["arguments"];
                                         tmp.img = value[0];
@@ -188,20 +251,21 @@ _html2canvas.Renderer.PDF = function( options ) {
                                         tmp.ctx.drawImage( tmp.img, 0, 0);
 
                                         switch(tmp.img.src.substring(tmp.img.src.lastIndexOf("."))) {
-                                            case "jpg":
+                                            case ".jpg":
                                                 tmp.imageMime = "image/jpeg";
                                                 tmp.imageType = "JPEG";
                                                 break;
+                                            case ".png":
+                                                tmp.imageMime = "image/png";
+                                                tmp.imageType = "PNG";
+                                                break;
                                         }
-                                        tmp.data = atob(tmp.canvas.toDataURL(tmp.imageMime).slice('data:' + tmp.imageMime + ";base64".length));
+                                        tmp.data = atob(tmp.canvas.toDataURL(tmp.imageMime).slice(('data:' + tmp.imageMime + ";base64,").length));
                                         document.body.removeChild(tmp.canvas);
 
-                                        pdf.addImage(tmp.data, tmp.imageType, value[1], value[2]);
-
-                                        // ctx.drawImage.apply( ctx, renderItem['arguments'] );
+                                        pdf.addImage(tmp.data, tmp.imageType, value[5], value[6], value[7], value[8]);
                                     }
                                 }
-
 
                                 break;
                             default:
@@ -214,26 +278,7 @@ _html2canvas.Renderer.PDF = function( options ) {
 
             }
 
-            /* h2clog("html2canvas: Renderer: Canvas renderer done - returning canvas obj");
-
-            queueLen = options.elements.length;
-
-            if (queueLen === 1) {
-                if (typeof options.elements[ 0 ] === "object" && options.elements[ 0 ].nodeName !== "BODY" && usingFlashcanvas === false) {
-                    // crop image to the bounds of selected (single) element
-                    bounds = _html2canvas.Util.Bounds( options.elements[ 0 ] );
-                    newCanvas = doc.createElement('canvas');
-                    newCanvas.width = bounds.width;
-                    newCanvas.height = bounds.height;
-                    ctx = newCanvas.getContext("2d");
-
-                    ctx.drawImage( canvas, bounds.left, bounds.top, bounds.width, bounds.height, 0, 0, bounds.width, bounds.height );
-                    canvas = null;
-                    return newCanvas;
-                }
-            } */
             pdf.output("datauriwindow");
-
             return pdf;
         }
     };
