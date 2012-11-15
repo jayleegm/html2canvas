@@ -1011,6 +1011,7 @@ function jsPDF(/** String */ orientation, /** String */ unit, /** String */ form
 			'BT\n/' +
 			activeFontKey + ' ' + activeFontSize + ' Tf\n' + // font face, style, size
 			activeFontSize + ' TL\n' + // line spacing
+			(activeFontSize * 0.25) + ' Ts\n' + // adjustment for baseline
 			textColor + 
 			'\n' + f2(x * k) + ' ' + f2((pageHeight - y) * k) + ' Td\n(' + 
 			str +
@@ -1512,12 +1513,10 @@ function jsPDF(/** String */ orientation, /** String */ unit, /** String */ form
 				return 'data:application/pdf;base64,' + btoa(buildDocument())
 			case 'datauri':
 			case 'dataurl':
-				document.location.href = 'data:application/pdf;base64,' + btoa(buildDocument());
-				break;
+				document.location.href = 'data:application/pdf;base64,' + btoa(buildDocument()); break;
 			case "datauriwindow":
 			case "dataurlwindow":
-				window.open("data:application/pdf;base64," + btoa(buildDocument()), "pdfDoc");
-				break;
+				window.open("data:application/pdf;base64," + btoa(buildDocument()), "pdfDoc"); break;
 			default: throw new Error('Output type "'+type+'" is not supported.') 
 		}
 		// @TODO: Add different output options
